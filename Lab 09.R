@@ -1,0 +1,110 @@
+
+## 0 load the packages 
+
+# remove # and install the package if you have not installed DiscriMiner during lecture 9
+# install.packages("https://cran.r-project.org/src/contrib/Archive/DiscriMiner/DiscriMiner_0.1-29.tar.gz", repos=NULL)
+library(DiscriMiner)
+library(caret)
+library(gains)
+
+
+## 1 create a data frame
+
+# load the data
+df <- read.csv("SystemAdministrators.csv")
+
+# first six rows
+head(df)
+
+# column names 
+names(df)
+
+
+
+## 2 data partition 
+
+# Set the random seed
+set.seed(1)
+
+train.index <- sample(c(1:dim(df)[1]), size = 0.6 * dim(df)[1])
+test.index <- setdiff(c(1:dim(df)[1]), train.index)
+
+
+## 3 perform a discriminant analysis using the training set
+
+# run a discriminant analysis using the training set
+da.reg <- linDA(df[train.index,1:2], df[train.index,3])
+
+# Classification function
+print(da.reg$classification.function)
+
+# Scores for poor administrators (class=No)
+poor_admin_scores <- da.reg$scores[da.reg$classes == "No"]
+print(poor_admin_scores)
+
+# Scores for good administrators (class=Yes)
+good_admin_scores <- da.reg$scores[da.reg$classes == "Yes"]
+print(good_admin_scores)
+
+# Predicted classes
+predicted_classes <- da.reg$class
+print(predicted_classes)
+
+
+
+
+## 4 making predictions for records in the test set  
+
+# classify observations in the test set 
+pred <- classify(da.reg, df[test.index,1:2])
+
+# classification scores 
+pred$scores
+
+# predicted probabilities of being a good administrator 
+prob.good <- exp(pred$scores)/(1 + exp(pred$scores))
+prob.good
+prob.accept <- exp(pred$scores[,2])/(exp(pred$scores[,1])+exp(pred$scores[,2]))
+prob.accept
+
+# predicted classes 
+pred$class
+
+
+## 5 confusion matrix 
+
+confusionMatrix(pred$pred_class, as.factor(df[test.index,]$Completed.task), positive = "Yes")
+
+
+
+## 6 creating a gain table 
+
+# gain table 
+actual_classes <- ifelse(df[test.index,3]=="Yes",1,0)
+predicted_probs <- prob.good
+gain <- gains(actual_classes, prob.accept, groups = 5)
+
+# cumulative percentage of good administrators  
+gain$cume.pct.of.total
+
+# cumulative number of administrators
+gain$cume.obs
+
+
+## 7 plot a lift chart
+
+# plot the cumulative number of good administrators against the cumulative number of administrators
+plot(c(0,gain$cume.pct.of.total*sum(df[test.index,3] == "Yes"))~c(0,gain$cume.obs), 
+     xlab="Cumulative number of administrators", ylab="Cumulative number of good administrators", type="l")
+
+# y axis values 
+c(0,sum(df[test.index,3]=="Yes"))
+
+# total number of customers  
+dim(df[test.index,])[1]
+
+# x axis values 
+c(0, dim(df[test.index,])[1])
+
+# add a baseline curve 
+lines(c(0,sum(df[test.index,3] == "Yes")) ~ c(0, dim(df[test.index,])[1]))
